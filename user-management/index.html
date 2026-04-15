@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Academy - User & Group Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 350px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .terminal-block {
+            background-color: #0f172a;
+            color: #4ade80;
+            font-family: monospace;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-top: 0.5rem;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        .hidden-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .revealed-answer {
+            max-height: 500px;
+            transition: max-height 0.3s ease-in;
+        }
+        /* Mobile menu transitions */
+        #sidebar {
+            transition: transform 0.3s ease-in-out;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        warmbg: '#faf9f6',
+                        brand: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            500: '#14b8a6',
+                            700: '#0f766e',
+                            900: '#134e4a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-warmbg text-slate-800 font-sans antialiased overflow-hidden flex flex-col h-screen">
+
+<!-- Chosen Palette: Warm Neutrals with Teal Accents (#faf9f6 background, #14b8a6 primary accent, slate grays for text) -->
+<!-- Application Structure Plan: Single-page application optimized for mobile and desktop. Utilizes a sidebar on desktop and a hamburger slide-out menu on mobile. Content is divided into logical tabs (Intro, Core Files, Users, Groups, Sudo, Exercises) to present RHEL-focused Linux administration concepts in an interactive, step-by-step learning flow. -->
+<!-- Visualization & Content Choices: Uses a Donut chart for UID distributions. Terminal blocks mimic actual server environments. Exercises use interactive "reveal" buttons for self-assessment. RHEL specifics are highlighted. Library used: Chart.js (NO SVG/Mermaid). -->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+<!-- Mobile Header (Visible only on small screens) -->
+<header class="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center z-30 shadow-md">
+    <div>
+        <h1 class="text-lg font-bold flex items-center gap-2">&#128187; User & Group Mgt.</h1>
+        <p class="text-xs text-brand-500 font-bold">Log Academy</p>
+    </div>
+    <button id="mobile-menu-btn" class="text-2xl focus:outline-none">&#9776;</button>
+</header>
+
+<div class="flex flex-grow overflow-hidden relative">
+    
+    <!-- Mobile Overlay -->
+    <div id="mobile-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-10 hidden md:hidden"></div>
+
+    <!-- Sidebar Navigation -->
+    <nav id="sidebar" class="bg-slate-900 text-slate-300 w-64 flex-shrink-0 flex flex-col shadow-xl z-20 absolute inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 h-full">
+        <div class="p-6 border-b border-slate-700 hidden md:block">
+            <h1 class="text-xl font-bold text-white flex items-center gap-2">
+                <span class="text-2xl">&#128187;</span> User & Group Mgt.
+            </h1>
+            <p class="text-sm mt-2 text-brand-500 font-bold tracking-wide uppercase">Log Academy</p>
+        </div>
+        <div class="flex-grow overflow-y-auto py-4">
+            <ul class="flex flex-col px-4 gap-2">
+                <li>
+                    <button class="tab-btn w-full text-left px-4 py-3 rounded-lg transition-colors whitespace-normal bg-brand-700 text-white font-medium" data-target="tab-intro">
+                        &#127760; Introduction & "The Why"
+                    </button>
+                </li>
+                <li>
+                    <button class="tab-btn w-full text-left px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors whitespace-normal" data-target="tab-core">
+                        &#128194; Core Configuration Files
+                    </button>
+                </li>
+                <li>
+                    <button class="tab-btn w-full text-left px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors whitespace-normal" data-target="tab-users">
+                        &#128100; User Management
+                    </button>
+                </li>
+                <li>
+                    <button class="tab-btn w-full text-left px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors whitespace-normal" data-target="tab-groups">
+                        &#128101; Group Management
+                    </button>
+                </li>
+                <li>
+                    <button class="tab-btn w-full text-left px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors whitespace-normal" data-target="tab-sudo">
+                        &#128273; Privileged Access (sudo)
+                    </button>
+                </li>
+                <li>
+                    <button class="tab-btn w-full text-left px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors whitespace-normal" data-target="tab-exercises">
+                        &#9997; Interactive Exercises
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow overflow-y-auto p-4 md:p-10 bg-warmbg w-full">
+        <div class="max-w-5xl mx-auto pb-20">
+            
+            <!-- Intro Tab -->
+            <div id="tab-intro" class="tab-content active">
+                <h2 class="text-3xl font-bold text-slate-900 mb-6 border-b pb-2">&#127760; Why User & Group Management?</h2>
+                <p class="text-lg text-slate-600 mb-8">Before diving into commands and files, it's crucial to understand <em>why</em> Linux uses this architecture. Linux is built from the ground up as a <strong>multi-user, multi-tasking</strong> operating system.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-t-4 border-t-brand-500">
+                        <h3 class="font-bold text-lg text-slate-800 mb-2">&#128274; Security & Isolation</h3>
+                        <p class="text-sm text-slate-600">If a malicious program runs under a standard user account, it can only damage that user's files. It cannot destroy the entire system because it lacks root privileges.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-t-4 border-t-brand-500">
+                        <h3 class="font-bold text-lg text-slate-800 mb-2">&#128269; Accountability</h3>
+                        <p class="text-sm text-slate-600">When everyone has their own account, system logs can accurately track who did what, and when. Shared accounts destroy accountability.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-t-4 border-t-brand-500">
+                        <h3 class="font-bold text-lg text-slate-800 mb-2">&#9878; Least Privilege</h3>
+                        <p class="text-sm text-slate-600">Groups allow administrators to grant exactly the permissions needed for a job without giving out full root access.</p>
+                    </div>
+                </div>
+
+                <div class="bg-brand-50 p-6 rounded-xl border border-brand-100 mb-12">
+                    <h3 class="font-bold text-brand-900 text-xl mb-3">The "Everything is a File" Philosophy</h3>
+                    <p class="text-sm text-slate-700 mb-2">In Linux, almost everything (hardware devices, processes, directories) is treated as a file. Access to these files is strictly controlled by ownership (User and Group). Therefore, mastering users and groups means mastering access control for the entire system.</p>
+                </div>
+            </div>
+
+            <!-- Core Files Tab -->
+            <div id="tab-core" class="tab-content">
+                <h2 class="text-3xl font-bold text-slate-900 mb-6 border-b pb-2">&#128194; Core Configuration Files</h2>
+                <p class="text-lg text-slate-600 mb-8">Linux systems rely on standard plain-text files to manage identity, authentication, and authorization.</p>
+
+                <div class="space-y-8 mb-12">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="text-2xl font-bold mb-4 text-brand-700 border-l-4 border-brand-500 pl-3">/etc/passwd</h3>
+                        <p class="text-sm text-slate-600 mb-4">Contains user account information. World-readable but only writable by root. It no longer contains actual password hashes.</p>
+                        <div class="terminal-block text-xs md:text-sm">
+                            root:x:0:0:root:/root:/bin/bash<br>
+                            alice:x:1000:1000:Alice Admin:/home/alice:/bin/bash
+                        </div>
+                        <p class="text-sm font-bold text-slate-800 mt-4 border-b pb-1">Format Breakdown (Separated by :)</p>
+                        <ul class="list-disc pl-5 text-sm text-slate-600 mt-2 space-y-1">
+                            <li><strong>Username</strong>: Login name</li>
+                            <li><strong>Password</strong>: 'x' indicates the actual hash is stored safely in /etc/shadow</li>
+                            <li><strong>UID</strong>: User ID (0 for root, 1000+ for regular users)</li>
+                            <li><strong>GID</strong>: Primary Group ID</li>
+                            <li><strong>GECOS</strong>: Comments/Full Name</li>
+                            <li><strong>Home Directory</strong>: Path to the user's home folder</li>
+                            <li><strong>Shell</strong>: Default command interpreter (e.g., /bin/bash)</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="text-2xl font-bold mb-4 text-brand-700 border-l-4 border-brand-500 pl-3">/etc/shadow</h3>
+                        <p class="text-sm text-slate-600 mb-4">Contains encrypted passwords and password aging information. Accessible <strong>only by root</strong> to prevent password cracking.</p>
+                        <div class="terminal-block text-xs md:text-sm">
+                            alice:$6$xyz...:19450:0:90:7:::
+                        </div>
+                        <p class="text-sm font-bold text-slate-800 mt-4 border-b pb-1">Format Breakdown (Separated by :)</p>
+                        <ul class="list-disc pl-5 text-sm text-slate-600 mt-2 space-y-1">
+                            <li><strong>Username</strong>: Login name (must match /etc/passwd)</li>
+                            <li><strong>Password Hash</strong>: Encrypted password ($6$ indicates SHA-512)</li>
+                            <li><strong>Last Change</strong>: Days since Jan 1, 1970 that the password was last changed</li>
+                            <li><strong>Min Age</strong>: Minimum days before the user is allowed to change it again</li>
+                            <li><strong>Max Age</strong>: Maximum days before the password expires</li>
+                            <li><strong>Warning</strong>: Days to warn the user before the password expires</li>
+                            <li><strong>Inactive</strong>: Days after expiration before the account is permanently locked</li>
+                            <li><strong>Expire</strong>: Absolute date (days since Jan 1, 1970) when the account expires</li>
+                            <li><strong>Reserved</strong>: Unused field</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="text-2xl font-bold mb-4 text-brand-700 border-l-4 border-brand-500 pl-3">/etc/group</h3>
+                        <p class="text-sm text-slate-600 mb-4">Defines groups on the system and assigns users to them for shared file access.</p>
+                        <div class="terminal-block text-xs md:text-sm">
+                            developers:x:1005:alice,bob
+                        </div>
+                        <p class="text-sm font-bold text-slate-800 mt-4 border-b pb-1">Format Breakdown (Separated by :)</p>
+                        <ul class="list-disc pl-5 text-sm text-slate-600 mt-2 space-y-1">
+                            <li><strong>Group Name</strong>: Name of the group</li>
+                            <li><strong>Password</strong>: Usually 'x' (group passwords are rarely used today)</li>
+                            <li><strong>GID</strong>: Group ID number</li>
+                            <li><strong>User List</strong>: Comma-separated list of supplementary members</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="text-xl font-semibold mb-4 text-center text-slate-800">RHEL Standard UID Allocation</h3>
+                    <p class="text-center text-sm text-slate-600 mb-6">Visualizing how modern Linux distributions allocate User IDs.</p>
+                    <div class="chart-container">
+                        <canvas id="uidChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Management Tab -->
+            <div id="tab-users" class="tab-content">
+                <h2 class="text-3xl font-bold text-slate-900 mb-6 border-b pb-2">&#128100; Local User Accounts</h2>
+                <p class="text-lg text-slate-600 mb-8">Command-line utilities provide a safe, automated way to modify the core configuration files securely without manually editing them.</p>
+
+                <div class="bg-blue-50 p-6 rounded-xl border border-blue-200 shadow-sm mb-8">
+                    <h3 class="text-xl font-bold text-blue-900 mb-2">useradd vs. adduser (RHEL Context)</h3>
+                    <p class="text-sm text-blue-800">In many tutorials, you might see <code>adduser</code>. On Debian/Ubuntu systems, <code>adduser</code> is an interactive script that asks for passwords and names step-by-step. <br><br><strong>However, on RHEL/CentOS systems</strong>, <code>adduser</code> is usually just a symbolic link pointing exactly to <code>useradd</code>. In the RHEL world, you must use <code>useradd</code> with the appropriate flags (like <code>-m</code>) to set up the account properly, and then use <code>passwd</code> to set the password.</p>
+                </div>
+
+                <div class="space-y-8">
+                    <div class="bg-white p-6 rounded-xl border border-l-4 border-l-brand-500 shadow-sm">
+                        <h3 class="text-2xl font-semibold text-slate-800 mb-2">useradd <span class="text-base font-normal text-slate-500">- Create a new user</span></h3>
+                        <p class="text-slate-600 mb-4">Creates a new user account.</p>
+                        <div class="terminal-block">sudo useradd -m -d /opt/jsmith -s /bin/bash -c "Developer" -G docker jsmith</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm text-slate-700">
+                            <div><strong class="text-slate-900">-m</strong> : Create the home directory (Crucial flag!)</div>
+                            <div><strong class="text-slate-900">-d [dir]</strong> : Specify a custom home directory path</div>
+                            <div><strong class="text-slate-900">-s [shell]</strong> : Define the login shell (e.g., /bin/bash)</div>
+                            <div><strong class="text-slate-900">-c [comment]</strong> : Add GECOS info (Full name, etc.)</div>
+                            <div><strong class="text-slate-900">-G [group1,group2]</strong> : Add to supplementary groups</div>
+                            <div><strong class="text-slate-900">-u [UID]</strong> : Force a specific User ID</div>
+                            <div><strong class="text-slate-900">-e [YYYY-MM-DD]</strong> : Set an account expiration date</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl border border-l-4 border-l-brand-500 shadow-sm">
+                        <h3 class="text-2xl font-semibold text-slate-800 mb-2">usermod <span class="text-base font-normal text-slate-500">- Modify an existing user</span></h3>
+                        <div class="terminal-block">sudo usermod -aG wheel jsmith<br>sudo usermod -L jsmith</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm text-slate-700 mb-4">
+                            <div><strong class="text-slate-900">-aG [group]</strong> : Append user to a supplementary group</div>
+                            <div><strong class="text-slate-900">-l [new_name]</strong> : Change the user's login name</div>
+                            <div><strong class="text-slate-900">-L</strong> : Lock the user's password</div>
+                            <div><strong class="text-slate-900">-U</strong> : Unlock a locked account</div>
+                            <div><strong class="text-slate-900">-d [new_dir] -m</strong> : Move home dir contents to new location</div>
+                        </div>
+                        <div class="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded text-sm mt-2">
+                            <strong>Critical Warning:</strong> Always use <code>-aG</code> together when appending a user to a supplementary group. Using only <code>-G</code> will <strong>overwrite and remove</strong> their current supplementary groups!
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl border border-l-4 border-l-brand-500 shadow-sm">
+                        <h3 class="text-2xl font-semibold text-slate-800 mb-2">userdel <span class="text-base font-normal text-slate-500">- Delete a user</span></h3>
+                        <div class="terminal-block">sudo userdel -r jsmith</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm text-slate-700">
+                            <div><strong class="text-slate-900">-r</strong> : Removes the user's home directory and mail spool. Without this, the home directory remains orphaned.</div>
+                            <div><strong class="text-slate-900">-f</strong> : Force deletion, even if the user is currently logged in.</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h3 class="text-2xl font-semibold text-slate-800 mb-4 border-b pb-2">Password Management</h3>
+                        
+                        <div class="mb-6">
+                            <h4 class="font-bold text-brand-700 text-lg">passwd</h4>
+                            <p class="text-sm text-slate-600 mb-2">Used to set or change user passwords. Root can change any password.</p>
+                            <div class="terminal-block">sudo passwd jsmith</div>
+                        </div>
+
+                        <div>
+                            <h4 class="font-bold text-brand-700 text-lg">chage <span class="text-sm font-normal text-slate-500">- Password aging policies</span></h4>
+                            <p class="text-sm text-slate-600 mb-2">Manages when a password expires, enforcing security policies.</p>
+                            <div class="terminal-block">sudo chage -M 90 -W 7 -E 2026-12-31 jsmith</div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4 text-sm text-slate-700">
+                                <div><strong class="text-slate-900">-M [days]</strong> : Max days before password change required</div>
+                                <div><strong class="text-slate-900">-m [days]</strong> : Min days between password changes</div>
+                                <div><strong class="text-slate-900">-W [days]</strong> : Warning days before expiration</div>
+                                <div><strong class="text-slate-900">-E [YYYY-MM-DD]</strong> : Account expiration date</div>
+                                <div><strong class="text-slate-900">-l [user]</strong> : List current aging info</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Group Management Tab -->
+            <div id="tab-groups" class="tab-content">
+                <h2 class="text-3xl font-bold text-slate-900 mb-6 border-b pb-2">&#128101; Group Management</h2>
+                <p class="text-lg text-slate-600 mb-8">Groups are used to organize users and manage permissions for files and directories efficiently.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-brand-50 p-6 rounded-xl border border-brand-100">
+                        <h3 class="font-bold text-brand-900 text-lg mb-2">Primary Group</h3>
+                        <p class="text-sm text-slate-700">Every user has exactly one primary group. When a user creates a new file, it is automatically assigned to this primary group. Specified by the 4th field in <code>/etc/passwd</code>.</p>
+                    </div>
+                    <div class="bg-slate-100 p-6 rounded-xl border border-slate-200">
+                        <h3 class="font-bold text-slate-900 text-lg mb-2">Supplementary Groups</h3>
+                        <p class="text-sm text-slate-700">Users can belong to zero or many supplementary (secondary) groups. These grant additional access permissions to files owned by those groups. Managed in <code>/etc/group</code>.</p>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div class="md:w-1/2">
+                            <h3 class="text-xl font-bold text-slate-800">groupadd</h3>
+                            <p class="text-sm text-slate-600">Create a new group.</p>
+                            <p class="text-xs text-slate-500 mt-1">Options: <strong>-g [GID]</strong> (Force specific Group ID)</p>
+                        </div>
+                        <div class="terminal-block w-full md:w-auto m-0 mt-2 md:mt-0 flex-grow">sudo groupadd -g 2000 developers</div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div class="md:w-1/2">
+                            <h3 class="text-xl font-bold text-slate-800">groupmod</h3>
+                            <p class="text-sm text-slate-600">Modify a group.</p>
+                            <p class="text-xs text-slate-500 mt-1">Options: <strong>-n [new_name]</strong>, <strong>-g [new_GID]</strong></p>
+                        </div>
+                        <div class="terminal-block w-full md:w-auto m-0 mt-2 md:mt-0 flex-grow">sudo groupmod -n devops developers</div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div class="md:w-1/2">
+                            <h3 class="text-xl font-bold text-slate-800">groupdel</h3>
+                            <p class="text-sm text-slate-600">Delete an existing group.</p>
+                        </div>
+                        <div class="terminal-block w-full md:w-auto m-0 mt-2 md:mt-0 flex-grow">sudo groupdel devops</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sudo Tab -->
+            <div id="tab-sudo" class="tab-content">
+                <h2 class="text-3xl font-bold text-slate-900 mb-6 border-b pb-2">&#128273; Privileged Access: sudo & visudo</h2>
+                <p class="text-lg text-slate-600 mb-6">Logging in directly as 'root' is dangerous. Best practice dictates using standard accounts and escalating privileges via <code>sudo</code> (Superuser DO) only when necessary.</p>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+                    <h3 class="text-xl font-bold text-slate-800 mb-4 border-l-4 border-brand-500 pl-3">The /etc/sudoers File</h3>
+                    <p class="text-sm text-slate-700 mb-4">This file controls who can run what commands as whom on which machines. <strong>NEVER edit this file directly with vi or nano.</strong> Always use <code>visudo</code>.</p>
+                    
+                    <div class="bg-red-50 border border-red-200 p-4 rounded-lg mb-6">
+                        <h4 class="font-bold text-red-800 mb-1">Why visudo?</h4>
+                        <p class="text-sm text-red-700"><code>visudo</code> locks the sudoers file against multiple simultaneous edits and performs a strict syntax check before saving. If you introduce a syntax error using a normal editor, you will break sudo and lock everyone out of root access!</p>
+                        <div class="terminal-block mt-2">sudo visudo</div>
+                    </div>
+
+                    <h4 class="font-bold text-slate-800 mb-2">Understanding sudoers Syntax</h4>
+                    <div class="terminal-block mb-2">
+                        alice   ALL=(ALL:ALL) ALL<br>
+                        %wheel  ALL=(ALL) NOPASSWD: ALL
+                    </div>
+                    <ul class="text-sm text-slate-700 space-y-2 mt-4 pl-4 list-decimal">
+                        <li><strong>User/Group</strong>: <code>alice</code> (user) or <code>%wheel</code> (group - indicated by %).</li>
+                        <li><strong>Host</strong>: <code>ALL</code> (First ALL means this applies to all hosts).</li>
+                        <li><strong>RunAs</strong>: <code>(ALL:ALL)</code> (Can run commands as any user:group).</li>
+                        <li><strong>Commands</strong>: <code>NOPASSWD: ALL</code> (Can run any command without prompting for a password).</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+                    <h3 class="text-xl font-bold text-slate-800 mb-4 border-l-4 border-blue-500 pl-3">Granting Specific Command Execution</h3>
+                    <p class="text-sm text-slate-700 mb-4">You don't always want to give full root access. You can grant access to <em>only specific commands</em>. <strong>Important: Always use absolute paths for commands in sudoers.</strong></p>
+                    
+                    <p class="text-sm text-slate-700 mb-2">Example: Give user <code>bob</code> permission to manage users, without requiring a password, but nothing else.</p>
+                    <div class="terminal-block mb-4 overflow-x-auto whitespace-pre-wrap">
+bob  ALL=(ALL) NOPASSWD: /usr/sbin/useradd, /usr/sbin/usermod, /usr/sbin/userdel, /usr/bin/passwd
+                    </div>
+                    <p class="text-sm text-slate-600 bg-slate-50 p-3 rounded border">With this line in sudoers, Bob can run <code>sudo useradd newuser</code>, but if he tries <code>sudo rm -rf /</code> or <code>sudo systemctl restart httpd</code>, he will be denied.</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="text-xl font-bold text-slate-800 mb-4">Full Access the Easy Way (RHEL Context)</h3>
+                    <p class="text-sm text-slate-700 mb-4">Instead of modifying the sudoers file, RHEL systems pre-configure the <code>wheel</code> group to have full sudo rights. Simply add a user to this group.</p>
+                    <div class="terminal-block">sudo usermod -aG wheel target_username</div>
+                </div>
+            </div>
+
+            <!-- Exercises Tab -->
+            <div id="tab-exercises" class="tab-content">
+                <h2 class="text-3xl font-bold text-slate-900 mb-6 border-b pb-2">&#9997; Interactive Exercises</h2>
+                <p class="text-lg text-slate-600 mb-8">Test your knowledge. Read the scenario, think of the command, and click to reveal the answer.</p>
+
+                <div class="space-y-6">
+                    
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-lg text-slate-800">Scenario 1</h3>
+                                <p class="text-slate-600 mt-1">Create a new user named 'sarah'. Ensure her home directory is created, her default shell is /bin/bash, and force her UID to be exactly 2050.</p>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <button class="reveal-btn bg-brand-500 hover:bg-brand-700 text-white font-bold py-2 px-4 rounded text-sm transition-colors">Reveal Answer</button>
+                            <div class="hidden-answer mt-3">
+                                <div class="terminal-block">sudo useradd -m -s /bin/bash -u 2050 sarah</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-lg text-slate-800">Scenario 2</h3>
+                                <p class="text-slate-600 mt-1">A new group called 'audit' needs to be created. Then, append existing user 'sarah' to this group without removing her from any other groups.</p>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <button class="reveal-btn bg-brand-500 hover:bg-brand-700 text-white font-bold py-2 px-4 rounded text-sm transition-colors">Reveal Answer</button>
+                            <div class="hidden-answer mt-3">
+                                <div class="terminal-block">sudo groupadd audit<br>sudo usermod -aG audit sarah</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-lg text-slate-800">Scenario 3</h3>
+                                <p class="text-slate-600 mt-1">Set a policy for 'sarah' so her password expires every 60 days, and she gets a warning 10 days before it expires.</p>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <button class="reveal-btn bg-brand-500 hover:bg-brand-700 text-white font-bold py-2 px-4 rounded text-sm transition-colors">Reveal Answer</button>
+                            <div class="hidden-answer mt-3">
+                                <div class="terminal-block">sudo chage -M 60 -W 10 sarah</div>
+                            </div>
+                        </div>
+                    </div>
+
+                     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-lg text-slate-800">Scenario 4</h3>
+                                <p class="text-slate-600 mt-1">Grant 'sarah' full privileged access using the standard RHEL group method without using visudo.</p>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <button class="reveal-btn bg-brand-500 hover:bg-brand-700 text-white font-bold py-2 px-4 rounded text-sm transition-colors">Reveal Answer</button>
+                            <div class="hidden-answer mt-3">
+                                <div class="terminal-block">sudo usermod -aG wheel sarah</div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        
+        // --- Navigation Logic ---
+        const tabs = document.querySelectorAll('.tab-btn');
+        const contents = document.querySelectorAll('.tab-content');
+        const sidebar = document.getElementById('sidebar');
+        const mobileBtn = document.getElementById('mobile-menu-btn');
+        const overlay = document.getElementById('mobile-overlay');
+
+        function closeMobileMenu() {
+            sidebar.classList.add('-translate-x-full');
+            overlay.classList.add('hidden');
+        }
+
+        function openMobileMenu() {
+            sidebar.classList.remove('-translate-x-full');
+            overlay.classList.remove('hidden');
+        }
+
+        mobileBtn.addEventListener('click', () => {
+            if (sidebar.classList.contains('-translate-x-full')) {
+                openMobileMenu();
+            } else {
+                closeMobileMenu();
+            }
+        });
+
+        overlay.addEventListener('click', closeMobileMenu);
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Update Button Styles
+                tabs.forEach(t => {
+                    t.classList.remove('bg-brand-700', 'text-white', 'font-medium');
+                    t.classList.add('hover:bg-slate-800');
+                });
+                tab.classList.remove('hover:bg-slate-800');
+                tab.classList.add('bg-brand-700', 'text-white', 'font-medium');
+
+                // Switch Content Panels
+                contents.forEach(c => c.classList.remove('active'));
+                const targetId = tab.getAttribute('data-target');
+                document.getElementById(targetId).classList.add('active');
+
+                // Auto-close menu on mobile after selection
+                if (window.innerWidth < 768) {
+                    closeMobileMenu();
+                }
+            });
+        });
+
+        // --- Reveal Exercises Logic ---
+        const revealBtns = document.querySelectorAll('.reveal-btn');
+        revealBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const answerDiv = this.nextElementSibling;
+                if (answerDiv.classList.contains('hidden-answer')) {
+                    answerDiv.classList.remove('hidden-answer');
+                    answerDiv.classList.add('revealed-answer');
+                    this.textContent = 'Hide Answer';
+                    this.classList.replace('bg-brand-500', 'bg-slate-500');
+                    this.classList.replace('hover:bg-brand-700', 'hover:bg-slate-700');
+                } else {
+                    answerDiv.classList.remove('revealed-answer');
+                    answerDiv.classList.add('hidden-answer');
+                    this.textContent = 'Reveal Answer';
+                    this.classList.replace('bg-slate-500', 'bg-brand-500');
+                    this.classList.replace('hover:bg-slate-700', 'hover:bg-brand-700');
+                }
+            });
+        });
+
+        // --- Chart.js Initialization ---
+        const ctx = document.getElementById('uidChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Root User (0)', 'System / Service Accounts (1-999)', 'Regular User Accounts (1000+)'],
+                datasets: [{
+                    data: [1, 999, 64000],
+                    backgroundColor: [
+                        '#ef4444', // Red for root
+                        '#64748b', // Slate for system
+                        '#14b8a6'  // Teal for regular users
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            font: {
+                                family: 'sans-serif',
+                                size: 12
+                            },
+                            padding: 20
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.dataIndex === 0) {
+                                    label += "1 ID (Superuser)";
+                                } else if (context.dataIndex === 1) {
+                                    label += "999 IDs (Daemons)";
+                                } else {
+                                    label += "64k+ IDs (Humans)";
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                cutout: '65%'
+            }
+        });
+    });
+</script>
+
+</body>
+</html>
