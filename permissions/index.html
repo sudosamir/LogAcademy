@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RHEL Permissions Masterclass</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 350px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .tab-btn.active {
+            border-bottom-width: 4px;
+            border-color: #dc2626;
+            color: #b91c1c;
+            font-weight: 700;
+        }
+        .perm-btn.active-r { background-color: #fee2e2; border-color: #ef4444; color: #991b1b; }
+        .perm-btn.active-w { background-color: #fef08a; border-color: #eab308; color: #854d0e; }
+        .perm-btn.active-x { background-color: #dcfce7; border-color: #22c55e; color: #166534; }
+        .perm-btn.active-s { background-color: #e0e7ff; border-color: #6366f1; color: #3730a3; }
+        .term-bg { background-color: #0f172a; }
+        
+        /* Fade in animation for page transitions */
+        .fade-in { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased selection:bg-red-200 selection:text-red-900">
+
+<!-- Chosen Palette: Red Hat Inspired (Slate background, Red primary accents for RHEL branding, varied status colors for code elements) -->
+<!-- Application Structure Plan: The SPA uses a top-level tabbed navigation to simulate distinct "pages" without leaving the single document. 
+     1. "Basics & Ownership": Establishes fundamental knowledge (chmod, chown, chgrp) using structured command cards.
+     2. "Special Permissions": Contains the advanced concepts (SUID, SGID, Sticky) and retains the Interactive Simulator.
+     3. "ACLs": Introduces fine-grained permissions using side-by-side command breakdowns (getfacl/setfacl).
+     This progressive disclosure prevents cognitive overload while providing a complete reference guide for RHEL instructors and students. -->
+<!-- Visualization & Content Choices: 
+     - Grid/Flex Layouts -> Goal: Organize command syntaxes -> HTML/Tailwind -> Justification: Cleanly separates commands from outputs.
+     - Overview Chart -> Goal: Inform -> Doughnut Chart (Chart.js) -> Justification: Contextualizes special permissions rarity. 
+     - Interactive Simulator -> Goal: Synthesize & Apply -> Vanilla JS DOM manipulation -> Justification: Tactile learning of octal math.
+     Confirming NO SVG or Mermaid JS is used. All icons are unicode. -->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+<div class="max-w-7xl mx-auto px-4 py-6">
+    
+    <!-- HEADER & NAVIGATION -->
+    <header class="mb-8 border-b-2 border-red-600 pb-4">
+        <div class="flex flex-col md:flex-row items-center justify-between mb-6">
+            <div>
+                <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight">RHEL Permissions Masterclass</h1>
+                <p class="text-lg text-slate-600 mt-2">Comprehensive guide to Linux Security: Basics, Special Bits, and ACLs.</p>
+            </div>
+            <div class="mt-4 md:mt-0 bg-red-600 text-white px-6 py-2 rounded-full font-bold shadow-md">
+                Log Academy
+            </div>
+        </div>
+
+        <nav class="flex space-x-1 md:space-x-8 overflow-x-auto">
+            <button onclick="showPage('page-basics')" id="nav-page-basics" class="nav-link whitespace-nowrap py-3 px-4 border-b-4 border-red-600 text-red-700 font-bold hover:bg-slate-100 transition-colors">
+                1. Basics & Ownership
+            </button>
+            <button onclick="showPage('page-special')" id="nav-page-special" class="nav-link whitespace-nowrap py-3 px-4 border-b-4 border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 font-medium transition-colors">
+                2. Special Permissions
+            </button>
+            <button onclick="showPage('page-acl')" id="nav-page-acl" class="nav-link whitespace-nowrap py-3 px-4 border-b-4 border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 font-medium transition-colors">
+                3. Access Control Lists (ACL)
+            </button>
+        </nav>
+    </header>
+
+    <!-- PAGE 1: BASICS & OWNERSHIP -->
+    <main id="page-basics" class="page-view fade-in block">
+        <section class="mb-10 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+            <h2 class="text-2xl font-bold mb-4 text-slate-800">The UGO & RWX Foundation</h2>
+            <p class="text-slate-600 mb-6">
+                Linux permissions are grouped into three categories: <strong>User (u)</strong>, <strong>Group (g)</strong>, and <strong>Others (o)</strong>. For each, you define <strong>Read (r=4)</strong>, <strong>Write (w=2)</strong>, and <strong>Execute (x=1)</strong>.
+            </p>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- chmod Section -->
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800 border-b pb-2 mb-4">Modifying Permissions (<code class="text-red-600">chmod</code>)</h3>
+                    <div class="space-y-4">
+                        <div class="term-bg p-4 rounded-lg text-slate-300 font-mono text-sm shadow-inner">
+                            <div class="text-slate-400 mb-1"># 1. Symbolic Mode (Add/Remove)</div>
+                            <div class="text-white">$ chmod u+x script.sh</div>
+                            <div class="text-emerald-400 italic mb-3">// Adds execute (x) to User (u)</div>
+                            
+                            <div class="text-white">$ chmod g-w,o=r report.txt</div>
+                            <div class="text-emerald-400 italic">// Removes write from Group, sets Others to strictly read-only</div>
+                        </div>
+
+                        <div class="term-bg p-4 rounded-lg text-slate-300 font-mono text-sm shadow-inner">
+                            <div class="text-slate-400 mb-1"># 2. Octal/Numeric Mode (Absolute)</div>
+                            <div class="text-white">$ chmod 755 public_html/</div>
+                            <div class="text-emerald-400 italic mb-2">// User: 7 (4+2+1 = rwx)</div>
+                            <div class="text-emerald-400 italic mb-2">// Group: 5 (4+1 = r-x)</div>
+                            <div class="text-emerald-400 italic">// Others: 5 (4+1 = r-x)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- chown & chgrp Section -->
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800 border-b pb-2 mb-4">Ownership (<code class="text-red-600">chown</code> & <code class="text-red-600">chgrp</code>)</h3>
+                    <div class="space-y-4">
+                        <div class="term-bg p-4 rounded-lg text-slate-300 font-mono text-sm shadow-inner">
+                            <div class="text-slate-400 mb-1"># Change File Owner</div>
+                            <div class="text-white">$ sudo chown alice project.txt</div>
+                            <div class="text-emerald-400 italic mb-3">// Makes user 'alice' the owner</div>
+
+                            <div class="text-slate-400 mb-1"># Change Owner AND Group simultaneously</div>
+                            <div class="text-white">$ sudo chown alice:devteam source_code/</div>
+                            <div class="text-emerald-400 italic mb-3">// Sets owner to 'alice', group to 'devteam'</div>
+
+                            <div class="text-slate-400 mb-1"># Change Group explicitly</div>
+                            <div class="text-white">$ sudo chgrp finance budget.xlsx</div>
+                            <div class="text-emerald-400 italic mb-3">// Sets the group owner to 'finance'</div>
+
+                            <div class="text-slate-400 mb-1"># Recursive changes (Apply to directories)</div>
+                            <div class="text-white">$ sudo chown -R bob:managers /var/data/</div>
+                            <div class="text-emerald-400 italic">// Modifies /var/data and all files inside it</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- PAGE 2: SPECIAL PERMISSIONS -->
+    <main id="page-special" class="page-view hidden fade-in">
+        <section class="mb-8 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+            <h2 class="text-2xl font-bold mb-4 text-slate-800">System Overview: The Exception, Not the Rule</h2>
+            <p class="text-slate-600 mb-6 leading-relaxed">
+                In Red Hat Enterprise Linux (RHEL), certain scenarios require elevated or restricted execution contexts beyond standard UGO. Special permissions exist for these edge cases. Out of thousands of files on a standard RHEL system, only a tiny fraction utilize these bits.
+            </p>
+
+            <div class="flex flex-col md:flex-row items-center gap-8">
+                <div class="w-full md:w-1/2">
+                    <div class="chart-container">
+                        <canvas id="permissionsChart"></canvas>
+                    </div>
+                </div>
+                <div class="w-full md:w-1/2 space-y-4">
+                    <div class="p-4 bg-slate-50 rounded-lg border-l-4 border-indigo-500">
+                        <h3 class="font-bold text-indigo-900">SUID (Set User ID)</h3>
+                        <p class="text-sm text-slate-600">Mostly on essential binaries (e.g., <code class="bg-white px-1">passwd</code>). Allows regular users to execute them with the owner's (usually root) privileges.</p>
+                    </div>
+                    <div class="p-4 bg-slate-50 rounded-lg border-l-4 border-emerald-500">
+                        <h3 class="font-bold text-emerald-900">SGID (Set Group ID)</h3>
+                        <p class="text-sm text-slate-600">Used on collaborative directories. New files inherit the directory's group ownership rather than the creator's group.</p>
+                    </div>
+                    <div class="p-4 bg-slate-50 rounded-lg border-l-4 border-amber-500">
+                        <h3 class="font-bold text-amber-900">Sticky Bit</h3>
+                        <p class="text-sm text-slate-600">Applied to world-writable directories (e.g., <code class="bg-white px-1">/tmp</code>). Prevents users from deleting each other's files.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Deep Dive Tabs -->
+        <section class="mb-8">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="flex flex-wrap border-b border-slate-200 bg-slate-50">
+                    <button onclick="switchTab('suid')" id="tab-suid" class="tab-btn active flex-1 py-4 px-6 text-center font-medium text-slate-600 hover:bg-slate-100 transition-colors focus:outline-none">
+                        <span class="text-xl mr-2">👤</span> SUID (4)
+                    </button>
+                    <button onclick="switchTab('sgid')" id="tab-sgid" class="tab-btn flex-1 py-4 px-6 text-center font-medium text-slate-600 hover:bg-slate-100 transition-colors focus:outline-none">
+                        <span class="text-xl mr-2">👥</span> SGID (2)
+                    </button>
+                    <button onclick="switchTab('sticky')" id="tab-sticky" class="tab-btn flex-1 py-4 px-6 text-center font-medium text-slate-600 hover:bg-slate-100 transition-colors focus:outline-none">
+                        <span class="text-xl mr-2">📌</span> Sticky (1)
+                    </button>
+                </div>
+
+                <div class="p-6 md:p-8 h-auto min-h-[300px]">
+                    <!-- SUID Content -->
+                    <div id="content-suid" class="block fade-in">
+                        <h3 class="text-xl font-bold text-slate-800 mb-2">Set User ID (SUID)</h3>
+                        <p class="text-slate-600 mb-4">When SUID is set, the file runs with the privileges of the file's <strong>owner</strong>. Meaningless on directories.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                            <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                <ul class="space-y-2 text-sm text-slate-600">
+                                    <li><strong>Apply via Math:</strong> <code class="font-bold">chmod 4755 file</code></li>
+                                    <li><strong>Apply via Symbol:</strong> <code class="font-bold">chmod u+s file</code></li>
+                                    <li><strong>Symbolic Output:</strong> Replaces User's <code class="font-mono bg-slate-200 px-1">x</code> with <code class="font-mono font-bold text-indigo-600 bg-indigo-100 px-1">s</code>.</li>
+                                    <li><strong>Edge Case:</strong> Without owner execution, it shows a capital <code class="font-mono font-bold text-red-600 bg-red-100 px-1">S</code>.</li>
+                                </ul>
+                            </div>
+                            <div class="term-bg text-slate-300 p-4 rounded-lg font-mono text-sm shadow-inner overflow-x-auto">
+                                <div class="text-green-400 mb-1">$ ls -l /usr/bin/passwd</div>
+                                <div class="text-white">-rw<span class="text-indigo-400 font-bold">s</span>r-xr-x. 1 root root 34K Nov /usr/bin/passwd</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SGID Content -->
+                    <div id="content-sgid" class="hidden fade-in">
+                        <h3 class="text-xl font-bold text-slate-800 mb-2">Set Group ID (SGID)</h3>
+                        <p class="text-slate-600 mb-4">On files, runs with group privileges. On <strong>directories</strong>, new files inherit the directory's group.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                            <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                <ul class="space-y-2 text-sm text-slate-600">
+                                    <li><strong>Apply via Math:</strong> <code class="font-bold">chmod 2775 dir/</code></li>
+                                    <li><strong>Apply via Symbol:</strong> <code class="font-bold">chmod g+s dir/</code></li>
+                                    <li><strong>Symbolic Output:</strong> Replaces Group's <code class="font-mono bg-slate-200 px-1">x</code> with <code class="font-mono font-bold text-emerald-600 bg-emerald-100 px-1">s</code>.</li>
+                                    <li><strong>Edge Case:</strong> Without group execution, it shows a capital <code class="font-mono font-bold text-red-600 bg-red-100 px-1">S</code>.</li>
+                                </ul>
+                            </div>
+                            <div class="term-bg text-slate-300 p-4 rounded-lg font-mono text-sm shadow-inner overflow-x-auto">
+                                <div class="text-green-400 mb-1">$ ls -ld /var/www/html/devteam</div>
+                                <div class="text-white">drwxr-w<span class="text-emerald-400 font-bold">s</span>r-x. 2 admin dev_group 4.0K /var/www/html/devteam</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sticky Content -->
+                    <div id="content-sticky" class="hidden fade-in">
+                        <h3 class="text-xl font-bold text-slate-800 mb-2">The Sticky Bit</h3>
+                        <p class="text-slate-600 mb-4">Used on <strong>directories</strong>. Only the file owner, directory owner, or root can delete/rename files inside.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                            <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                <ul class="space-y-2 text-sm text-slate-600">
+                                    <li><strong>Apply via Math:</strong> <code class="font-bold">chmod 1777 dir/</code></li>
+                                    <li><strong>Apply via Symbol:</strong> <code class="font-bold">chmod +t dir/</code></li>
+                                    <li><strong>Symbolic Output:</strong> Replaces Others' <code class="font-mono bg-slate-200 px-1">x</code> with <code class="font-mono font-bold text-amber-600 bg-amber-100 px-1">t</code>.</li>
+                                    <li><strong>Edge Case:</strong> Without others execution, it shows a capital <code class="font-mono font-bold text-red-600 bg-red-100 px-1">T</code>.</li>
+                                </ul>
+                            </div>
+                            <div class="term-bg text-slate-300 p-4 rounded-lg font-mono text-sm shadow-inner overflow-x-auto">
+                                <div class="text-green-400 mb-1">$ ls -ld /tmp</div>
+                                <div class="text-white">drwxrwxrwx<span class="text-amber-400 font-bold">t</span>. 15 root root 4.0K Oct 12 /tmp</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Simulator -->
+        <section class="mb-10">
+            <h2 class="text-2xl font-bold mb-4 text-slate-800">Interactive Permission Simulator</h2>
+            <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 md:p-10 flex flex-col xl:flex-row gap-8">
+                
+                <div class="w-full xl:w-3/5 space-y-6">
+                    <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                        <h3 class="font-bold text-indigo-900 mb-3 flex items-center justify-between">
+                            <span>Special Bits (First Digit)</span>
+                            <span id="val-special" class="font-mono bg-indigo-200 text-indigo-900 px-2 py-1 rounded text-sm">0</span>
+                        </h3>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="toggleBit('suid', 4)" id="btn-suid" class="perm-btn border-2 border-slate-200 text-slate-600 py-2 rounded-lg font-bold transition-all">SUID (4)</button>
+                            <button onclick="toggleBit('sgid', 2)" id="btn-sgid" class="perm-btn border-2 border-slate-200 text-slate-600 py-2 rounded-lg font-bold transition-all">SGID (2)</button>
+                            <button onclick="toggleBit('sticky', 1)" id="btn-sticky" class="perm-btn border-2 border-slate-200 text-slate-600 py-2 rounded-lg font-bold transition-all">Sticky (1)</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <h3 class="font-bold text-slate-800 mb-3 flex justify-between">
+                                Owner <span id="val-owner" class="font-mono bg-slate-200 px-2 py-1 rounded text-sm">0</span>
+                            </h3>
+                            <div class="flex flex-col gap-2">
+                                <button onclick="toggleBit('u_r', 4)" id="btn-u_r" class="perm-btn border-2 border-slate-200 text-slate-600 py-1 rounded font-mono transition-all">Read (4)</button>
+                                <button onclick="toggleBit('u_w', 2)" id="btn-u_w" class="perm-btn border-2 border-slate-200 text-slate-600 py-1 rounded font-mono transition-all">Write (2)</button>
+                                <button onclick="toggleBit('u_x', 1)" id="btn-u_x" class="perm-btn border-2 border-slate-200 text-slate-600 py-1 rounded font-mono transition-all">Execute (1)</button>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <h3 class="font-bold text-slate-800 mb-3 flex justify-between">
+                                Group <span id="val-group" class="font-mono bg-slate-200 px-2 py-1 rounded text-sm">0</span>
+                            </h3>
+                            <div class="flex flex-col gap-2">
+                                <button onclick="toggleBit('g_r', 4)" id="btn-g_r" class="perm-btn border-2 border-slate-200 text-slate-600 py-1 rounded font-mono transition-all">Read (4)</button>
+                                <button onclick="toggleBit('g_w', 2)" id="btn-g_w" class="perm-btn border-2 border-slate-200 text-slate-600 py-1 rounded font-mono transition-all">Write (2)</button>
+                                <button onclick="toggleBit('g_x', 1)" id="btn-g_x" class="perm-btn border-2 border-slate-200 text-slate-600 py-1 rounded font-mono transition-all">Execute (1)</button>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <h3 class="font-bold text-slate-800 mb-3 flex justify-between">
+                                Others <span id="val-others" class="font-mono bg-slate-200 px-2 py-1 rounded text-sm">0</span>
+                            </h3>
+                            <div class="flex flex-col gap-2">
+                                <button onclick="toggleBit('o_r', 4)" id="btn-o_r" class="perm-btn border-2 border-slate-200 text-slate-600 py-1 rounded font-mono transition-all">Read (4)</button>
+                                <button onclick="toggleBit('o_w', 2)" id="btn-o_w" class="perm-btn border-2 border-slate-200 text-slate-600 py-1 rounded font-mono transition-all">Write (2)</button>
+                                <button onclick="toggleBit('o_x', 1)" id="btn-o_x" class="perm-btn border-2 border-slate-200 text-slate-600 py-1 rounded font-mono transition-all">Execute (1)</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-full xl:w-2/5 flex flex-col justify-center term-bg rounded-xl p-8 text-white shadow-inner relative overflow-hidden">
+                    <p class="text-slate-400 text-sm mb-2 font-mono uppercase tracking-wider">Command Output</p>
+                    <div class="text-4xl font-mono text-red-400 mb-6 font-bold tracking-widest break-all">
+                        chmod <span id="output-octal" class="text-white">0000</span>
+                    </div>
+
+                    <p class="text-slate-400 text-sm mb-2 font-mono uppercase tracking-wider">Symbolic Result</p>
+                    <div class="text-3xl font-mono text-emerald-400 font-bold tracking-widest bg-slate-900 p-4 rounded-lg shadow-inner inline-block">
+                        -<span id="output-sym">rwxrwxrwx</span>
+                    </div>
+                    
+                    <p id="warning-text" class="text-red-400 text-sm mt-4 italic hidden">
+                        ⚠ Warning: A special bit is set without execution permissions. Indicated by capital letters (S/T).
+                    </p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- PAGE 3: ACCESS CONTROL LISTS (ACL) -->
+    <main id="page-acl" class="page-view hidden fade-in">
+        <section class="mb-10 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+            <h2 class="text-2xl font-bold mb-4 text-slate-800">Access Control Lists (ACLs)</h2>
+            <p class="text-slate-600 mb-6 leading-relaxed">
+                Standard UGO permissions have a limitation: what if you want to give a <em>specific</em> user (who isn't the owner) read access, without giving it to the entire group or everyone else? <strong>ACLs</strong> solve this by allowing fine-grained permissions for specific users and groups.
+            </p>
+
+            <div class="bg-indigo-50 border-l-4 border-indigo-500 p-4 mb-8 text-indigo-900">
+                <strong>Crucial Indicator:</strong> When an ACL is active on a file, the standard <code>ls -l</code> output will show a <strong><code>+</code></strong> sign at the end of the permissions block (e.g., <code>-rw-rwxr--+</code>).
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- getfacl -->
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800 border-b pb-2 mb-4">Viewing ACLs (<code class="text-red-600">getfacl</code>)</h3>
+                    <div class="term-bg p-4 rounded-lg text-slate-300 font-mono text-sm shadow-inner h-full">
+                        <div class="text-green-400 mb-1">$ getfacl document.txt</div>
+                        <div class="text-slate-400 italic mb-2"># file: document.txt</div>
+                        <div class="text-slate-400 italic mb-2"># owner: root</div>
+                        <div class="text-slate-400 italic mb-2"># group: root</div>
+                        <div class="text-white mb-1">user::rw-</div>
+                        <div class="text-yellow-400 font-bold mb-1">user:alice:rwx <span class="text-slate-400 font-normal italic ml-2">// Specific user ACL</span></div>
+                        <div class="text-white mb-1">group::r--</div>
+                        <div class="text-yellow-400 font-bold mb-1">group:devteam:rw- <span class="text-slate-400 font-normal italic ml-2">// Specific group ACL</span></div>
+                        <div class="text-white mb-1">mask::rwx</div>
+                        <div class="text-white mb-1">other::r--</div>
+                    </div>
+                </div>
+
+                <!-- setfacl -->
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800 border-b pb-2 mb-4">Modifying ACLs (<code class="text-red-600">setfacl</code>)</h3>
+                    <div class="space-y-4">
+                        <div class="term-bg p-4 rounded-lg text-slate-300 font-mono text-sm shadow-inner">
+                            <div class="text-slate-400 mb-1"># Grant user 'alice' read/write access</div>
+                            <div class="text-white">$ setfacl -m u:alice:rw file.txt</div>
+                            
+                            <div class="text-slate-400 mt-4 mb-1"># Grant group 'contractors' read access</div>
+                            <div class="text-white">$ setfacl -m g:contractors:r data/</div>
+
+                            <div class="text-slate-400 mt-4 mb-1"># Remove a specific ACL rule for 'alice'</div>
+                            <div class="text-white">$ setfacl -x u:alice file.txt</div>
+
+                            <div class="text-slate-400 mt-4 mb-1"># Remove ALL ACLs (revert to basic UGO)</div>
+                            <div class="text-white">$ setfacl -b file.txt</div>
+
+                            <div class="text-slate-400 mt-4 mb-1"># Set Default ACL for new files in a directory</div>
+                            <div class="text-white">$ setfacl -m d:u:alice:rwx project_dir/</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+</div>
+
+<script>
+    // --- Navigation Logic ---
+    let chartRendered = false;
+
+    function showPage(pageId) {
+        // Hide all pages
+        document.querySelectorAll('.page-view').forEach(p => p.classList.add('hidden'));
+        document.querySelectorAll('.page-view').forEach(p => p.classList.remove('block'));
+        
+        // Reset nav styles
+        document.querySelectorAll('.nav-link').forEach(l => {
+            l.classList.remove('border-red-600', 'text-red-700', 'font-bold');
+            l.classList.add('border-transparent', 'text-slate-500', 'font-medium');
+        });
+
+        // Show selected page
+        document.getElementById(pageId).classList.remove('hidden');
+        document.getElementById(pageId).classList.add('block');
+        
+        // Update nav style
+        const activeNav = document.getElementById('nav-' + pageId);
+        activeNav.classList.remove('border-transparent', 'text-slate-500', 'font-medium');
+        activeNav.classList.add('border-red-600', 'text-red-700', 'font-bold');
+
+        // Render chart lazily when Special page is opened to prevent canvas sizing issues
+        if(pageId === 'page-special' && !chartRendered) {
+            initChart();
+            chartRendered = true;
+        }
+    }
+
+    // --- Special Permissions Tabs ---
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('tab-' + tabId).classList.add('active');
+
+        document.getElementById('content-suid').classList.add('hidden');
+        document.getElementById('content-sgid').classList.add('hidden');
+        document.getElementById('content-sticky').classList.add('hidden');
+
+        document.getElementById('content-' + tabId).classList.remove('hidden');
+    }
+
+    // --- Interactive Simulator Logic ---
+    const state = {
+        special: { suid: false, sgid: false, sticky: false },
+        user: { r: false, w: false, x: false },
+        group: { r: false, w: false, x: false },
+        others: { r: false, w: false, x: false }
+    };
+
+    function toggleBit(id, value) {
+        if (id === 'suid' || id === 'sgid' || id === 'sticky') {
+            state.special[id] = !state.special[id];
+            updateBtnVisual('btn-' + id, state.special[id], 's');
+        } else {
+            const parts = id.split('_');
+            const category = parts[0] === 'u' ? 'user' : parts[0] === 'g' ? 'group' : 'others';
+            const perm = parts[1];
+            state[category][perm] = !state[category][perm];
+            updateBtnVisual('btn-' + id, state[category][perm], perm);
+        }
+        calculatePermissions();
+    }
+
+    function updateBtnVisual(btnId, isActive, type) {
+        const btn = document.getElementById(btnId);
+        btn.classList.remove('active-r', 'active-w', 'active-x', 'active-s');
+        if (isActive) {
+            btn.classList.add('active-' + type);
+        }
+    }
+
+    function calculatePermissions() {
+        let specialVal = 0;
+        if(state.special.suid) specialVal += 4;
+        if(state.special.sgid) specialVal += 2;
+        if(state.special.sticky) specialVal += 1;
+
+        let userVal = 0;
+        if(state.user.r) userVal += 4;
+        if(state.user.w) userVal += 2;
+        if(state.user.x) userVal += 1;
+
+        let groupVal = 0;
+        if(state.group.r) groupVal += 4;
+        if(state.group.w) groupVal += 2;
+        if(state.group.x) groupVal += 1;
+
+        let othersVal = 0;
+        if(state.others.r) othersVal += 4;
+        if(state.others.w) othersVal += 2;
+        if(state.others.x) othersVal += 1;
+
+        document.getElementById('val-special').innerText = specialVal;
+        document.getElementById('val-owner').innerText = userVal;
+        document.getElementById('val-group').innerText = groupVal;
+        document.getElementById('val-others').innerText = othersVal;
+
+        document.getElementById('output-octal').innerText = `${specialVal}${userVal}${groupVal}${othersVal}`;
+
+        let symU = (state.user.r ? 'r' : '-') + (state.user.w ? 'w' : '-');
+        if (state.special.suid) {
+            symU += state.user.x ? 's' : 'S';
+        } else {
+            symU += state.user.x ? 'x' : '-';
+        }
+
+        let symG = (state.group.r ? 'r' : '-') + (state.group.w ? 'w' : '-');
+        if (state.special.sgid) {
+            symG += state.group.x ? 's' : 'S';
+        } else {
+            symG += state.group.x ? 'x' : '-';
+        }
+
+        let symO = (state.others.r ? 'r' : '-') + (state.others.w ? 'w' : '-');
+        if (state.special.sticky) {
+            symO += state.others.x ? 't' : 'T';
+        } else {
+            symO += state.others.x ? 'x' : '-';
+        }
+
+        const fullSym = symU + symG + symO;
+        document.getElementById('output-sym').innerText = fullSym;
+
+        if (fullSym.includes('S') || fullSym.includes('T')) {
+            document.getElementById('warning-text').classList.remove('hidden');
+        } else {
+            document.getElementById('warning-text').classList.add('hidden');
+        }
+    }
+
+    // --- Chart Initialization ---
+    function initChart() {
+        const ctx = document.getElementById('permissionsChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Standard Permissions', 'SUID Files', 'SGID Dirs/Files', 'Sticky Bit Dirs'],
+                datasets: [{
+                    data: [98.5, 0.5, 0.8, 0.2],
+                    backgroundColor: ['#e2e8f0', '#6366f1', '#10b981', '#f59e0b'],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { font: { family: 'sans-serif', size: 12 }, color: '#475569' }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) { return context.label + ': ~' + context.raw + '%'; }
+                        }
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+    }
+
+    // Initialize the simulator text on load
+    document.addEventListener('DOMContentLoaded', () => {
+        calculatePermissions();
+        // Basics page is visible by default; Chart will render when Special is clicked.
+    });
+</script>
+</body>
+</html>
