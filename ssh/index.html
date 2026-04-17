@@ -1,2 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Academy - RHEL 9 SSH Masterclass</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for main page and terminal blocks */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .term-scroll::-webkit-scrollbar-track { background: #0f172a; border-radius: 0 0 8px 8px; }
+        .term-scroll::-webkit-scrollbar-thumb { background: #334155; }
+        .term-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
 
-test
+        .nav-active {
+            background-color: #f0fdfa; /* teal-50 */
+            color: #0f766e; /* teal-700 */
+            border-right: 4px solid #14b8a6; /* teal-500 */
+        }
+        .fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .reveal-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.6s ease-in-out, opacity 0.6s ease-in-out, margin 0.6s;
+            opacity: 0;
+        }
+        .reveal-content.show {
+            max-height: 2000px;
+            opacity: 1;
+            margin-top: 1.5rem;
+        }
+        .inline-cmd {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+            font-size: 0.9em;
+            border: 1px solid #e2e8f0;
+        }
+        /* Terminal Line Formatting */
+        .cmd-line { display: block; line-height: 1.6; }
+        .prompt-user { color: #60a5fa; font-weight: 600; } /* blue-400 */
+        .prompt-root { color: #f87171; font-weight: 600; } /* red-400 */
+        .cmd-input { color: #4ade80; } /* green-400 */
+        .cmd-output { color: #cbd5e1; } /* slate-300 */
+        .cmd-comment { color: #64748b; font-style: italic; } /* slate-500 */
+    </style>
+</head>
+
+<!-- Chosen Palette: Warm neutral bg (#faf9f6), slate grays (text), primary teal (#14b8a6), dark slate (#0f172a) terminal -->
+<!-- Application Structure Plan: 7-Tab Dashboard. Breaking out "Hardening" from "Config Structure" to allow deep dives into changing ports (and SELinux/Firewall implications). Terminals are rebuilt using standard Mac/Linux visual cues for extreme realism. -->
+<!-- Visualization & Content Choices: 
+  - Goal: Visualizing complex SELinux/Firewalld flow -> Method: Step-by-step HTML block diagram.
+  - Goal: Terminal output realism -> Method: Specific CSS classes for prompts, user input, and comments. Horizontal scroll applied to terminal wrapper to guarantee responsiveness without breaking pre-formatted text.
+-->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+<body class="bg-[#faf9f6] text-slate-700 font-sans antialiased flex flex-col md:flex-row min-h-screen selection:bg-teal-200 selection:text-teal-900 overflow-x-hidden">
+
+    <!-- Mobile Header -->
+    <header class="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-50 shadow-md">
+        <div class="text-xl font-bold flex items-center gap-2 tracking-wide">
+            <span>🪵</span> Log Academy
+        </div>
+        <button id="mobile-menu-btn" class="text-teal-400 hover:text-teal-300 focus:outline-none transition-colors">
+            <span class="text-3xl leading-none block">&equiv;</span>
+        </button>
+    </header>
+
+    <!-- Sidebar Navigation -->
+    <nav id="sidebar" class="bg-white border-r border-slate-200 w-full md:w-80 flex-shrink-0 flex-col h-auto md:h-screen sticky top-0 transition-transform duration-300 md:flex hidden z-40 shadow-sm overflow-y-auto">
+        <div class="p-6 hidden md:flex items-center gap-3 text-2xl font-extrabold text-slate-800 border-b border-slate-100 tracking-tight">
+            <span>🪵</span> Log Academy
+        </div>
+        <div class="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Enterprise Linux 9</div>
+            <div class="text-base font-bold text-slate-800 leading-tight">Configure & Secure OpenSSH</div>
+        </div>
+        <div class="flex flex-col py-3 flex-grow text-sm font-medium">
+            <button class="nav-btn nav-active text-left px-6 py-3.5 text-slate-600 hover:bg-slate-50 transition-colors" data-target="tab-intro">
+                1. Architecture & Protocol
+            </button>
+            <button class="nav-btn text-left px-6 py-3.5 text-slate-600 hover:bg-slate-50 transition-colors" data-target="tab-client">
+                2. Client Execution & TOFU
+            </button>
+            <button class="nav-btn text-left px-6 py-3.5 text-slate-600 hover:bg-slate-50 transition-colors" data-target="tab-keys">
+                3. Key-Based Authentication
+            </button>
+            <button class="nav-btn text-left px-6 py-3.5 text-slate-600 hover:bg-slate-50 transition-colors" data-target="tab-serverconfig">
+                4. SSH Daemon Structure
+            </button>
+            <button class="nav-btn text-left px-6 py-3.5 text-slate-600 hover:bg-slate-50 transition-colors" data-target="tab-hardening">
+                5. Hardening & Custom Ports
+            </button>
+            <button class="nav-btn text-left px-6 py-3.5 text-slate-600 hover:bg-slate-50 transition-colors" data-target="tab-transfers">
+                6. File Transfers & su
+            </button>
+            <button class="nav-btn text-left px-6 py-5 font-bold text-teal-700 hover:bg-teal-50 transition-colors mt-4 border-t border-slate-200 bg-teal-50/30 flex items-center gap-2" data-target="tab-exercises">
+                <span>🎯</span> RHCSA Challenge Labs
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow p-5 md:p-10 lg:p-14 max-w-6xl mx-auto w-full overflow-x-hidden">
+
+        <!-- TAB 1: Architecture -->
+        <section id="tab-intro" class="tab-content fade-in block">
+            <header class="mb-10 border-b border-slate-200 pb-6">
+                <span class="bg-teal-100 text-teal-800 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Theory</span>
+                <h1 class="text-3xl md:text-5xl font-extrabold text-slate-900 mt-5 mb-4 tracking-tight">OpenSSH Architecture</h1>
+                <p class="text-slate-500 text-lg md:text-xl leading-relaxed max-w-3xl">Replacing insecure protocols like telnet, SSH provides a cryptographic tunnel for remote administration. Understand the underlying handshake mechanism.</p>
+            </header>
+
+            <!-- HTML/CSS Flow Diagram -->
+            <h3 class="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <span class="text-yellow-500 text-2xl">⚡</span> The SSH Cryptographic Handshake
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 mb-12">
+                <!-- Client Box -->
+                <div class="md:col-span-4 bg-white p-6 rounded-xl border-2 border-slate-200 shadow-sm text-center relative z-10">
+                    <div class="text-5xl mb-3">💻</div>
+                    <h4 class="font-bold text-slate-800 text-lg">SSH Client</h4>
+                    <p class="text-xs text-slate-500 mt-1">Initiates Connection</p>
+                </div>
+
+                <!-- Connection Steps -->
+                <div class="md:col-span-4 flex flex-col justify-center gap-3 relative">
+                    <!-- Visual connecting line hidden on mobile -->
+                    <div class="hidden md:block absolute top-1/2 left-0 w-full h-1 bg-slate-200 -z-10 -translate-y-1/2"></div>
+                    
+                    <div class="bg-slate-50 text-slate-700 text-xs font-bold p-2 text-center rounded border border-slate-200 shadow-sm">1. TCP Handshake (Port 22)</div>
+                    <div class="bg-slate-50 text-slate-700 text-xs font-bold p-2 text-center rounded border border-slate-200 shadow-sm">2. Server sends Host Key</div>
+                    <div class="bg-teal-50 text-teal-800 text-xs font-bold p-2 text-center rounded border border-teal-200 shadow-sm">3. Symmetric Tunnel Established</div>
+                    <div class="bg-slate-800 text-white text-xs font-bold p-2 text-center rounded shadow-sm">4. User Authentication</div>
+                </div>
+
+                <!-- Server Box -->
+                <div class="md:col-span-4 bg-white p-6 rounded-xl border-2 border-teal-500 shadow-md text-center relative z-10">
+                    <div class="text-5xl mb-3">🖥️</div>
+                    <h4 class="font-bold text-teal-800 text-lg">SSH Daemon (sshd)</h4>
+                    <p class="text-xs text-slate-500 mt-1">Authenticates & Serves Shell</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6 md:p-8">
+                <h3 class="text-lg font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">The RHEL 9 Service: <code class="text-teal-600 bg-teal-50 px-1 rounded">sshd.service</code></h3>
+                <p class="text-slate-600 mb-4 leading-relaxed">In Red Hat Enterprise Linux 9, the OpenSSH server daemon is managed by systemd. It is enabled and running by default upon installation.</p>
+                
+                <!-- Terminal Block -->
+                <div class="rounded-lg shadow-lg overflow-hidden border border-slate-700 bg-slate-800">
+                    <!-- Window Controls -->
+                    <div class="bg-slate-900 px-4 py-2 flex items-center gap-2 border-b border-slate-950">
+                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span class="text-slate-500 text-xs font-mono ml-2">root@servera:~</span>
+                    </div>
+                    <!-- Terminal Content -->
+                    <div class="bg-[#0f172a] p-5 text-sm font-mono overflow-x-auto whitespace-pre term-scroll">
+<span class="cmd-line"><span class="prompt-root">[root@servera ~]#</span> <span class="cmd-input">systemctl status sshd</span></span>
+<span class="cmd-line"><span class="cmd-output">● sshd.service - OpenSSH server daemon
+     Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; vendor preset: enabled)
+     Active: <span class="text-green-400 font-bold">active (running)</span> since Mon 2024-10-28 09:00:00 EST; 2 days ago
+   Main PID: 1052 (sshd)
+      Tasks: 1 (limit: 22765)
+     Memory: 5.2M</span></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: SSH Client -->
+        <section id="tab-client" class="tab-content fade-in hidden">
+            <header class="mb-10 border-b border-slate-200 pb-6">
+                <span class="bg-teal-100 text-teal-800 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Execution</span>
+                <h1 class="text-3xl md:text-5xl font-extrabold text-slate-900 mt-5 mb-4 tracking-tight">The ssh Client & TOFU</h1>
+                <p class="text-slate-500 text-lg md:text-xl leading-relaxed max-w-3xl">Connecting to hosts, running one-off commands, and resolving Trust On First Use (TOFU) host identification errors.</p>
+            </header>
+
+            <h3 class="text-2xl font-bold text-slate-800 mb-4">Core Syntax & Critical Options</h3>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-10 w-full overflow-x-auto">
+                <table class="w-full text-left text-sm min-w-[600px]">
+                    <thead class="bg-slate-50 text-slate-800 border-b border-slate-200">
+                        <tr>
+                            <th class="p-4 font-bold w-1/3">Command / Option</th>
+                            <th class="p-4 font-bold">Real-World Case</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <tr class="hover:bg-slate-50/50 transition-colors">
+                            <td class="p-4 font-mono font-semibold text-slate-800">ssh user@host</td>
+                            <td class="p-4 text-slate-600">Standard interactive login. Defaults to current local user if `user@` is omitted.</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50/50 transition-colors bg-teal-50/10">
+                            <td class="p-4 font-mono font-semibold text-slate-800">ssh user@host [command]</td>
+                            <td class="p-4 text-slate-600">
+                                <strong>Non-interactive execution.</strong> Run a command, capture output, and close connection automatically.<br>
+                                <span class="inline-cmd mt-2">ssh root@db-server tail -n 20 /var/log/messages</span>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-slate-50/50 transition-colors">
+                            <td class="p-4 font-mono font-semibold text-slate-800">-p [port_number]</td>
+                            <td class="p-4 text-slate-600">Connect to a server listening on a custom port. <br>
+                                <span class="inline-cmd mt-2">ssh -p 2222 admin@firewall.local</span>
+                            </td>
+                        </tr>
+                        <tr class="hover:bg-slate-50/50 transition-colors">
+                            <td class="p-4 font-mono font-semibold text-slate-800">-i /path/to/private_key</td>
+                            <td class="p-4 text-slate-600">Specify an exact identity file instead of the defaults in <span class="inline-cmd">~/.ssh/</span>.</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50/50 transition-colors">
+                            <td class="p-4 font-mono font-semibold text-slate-800">-v, -vv, -vvv</td>
+                            <td class="p-4 text-slate-600">Verbose debugging. <strong>Mandatory</strong> when troubleshooting key rejections or connection drops.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 class="text-2xl font-bold text-slate-800 mb-4">Trust On First Use (TOFU) & Known Hosts</h3>
+            <p class="text-slate-600 mb-6 leading-relaxed">
+                SSH mitigates Man-in-the-Middle attacks by tracking server identity keys. 
+                System-wide known hosts are stored in <span class="inline-cmd font-bold">/etc/ssh/ssh_known_hosts</span>, while user-specific host fingerprints are stored in <span class="inline-cmd font-bold">~/.ssh/known_hosts</span>.
+            </p>
+
+            <!-- Real World Scenario Terminal -->
+            <div class="rounded-lg shadow-xl overflow-hidden border border-slate-700 bg-slate-800 mb-6">
+                <div class="bg-slate-900 px-4 py-2 flex items-center gap-2 border-b border-slate-950">
+                    <div class="w-3 h-3 rounded-full bg-slate-600"></div><div class="w-3 h-3 rounded-full bg-slate-600"></div><div class="w-3 h-3 rounded-full bg-slate-600"></div>
+                    <span class="text-slate-400 text-xs font-mono ml-2">Troubleshooting: Host Key Changed</span>
+                </div>
+                <div class="bg-[#0f172a] p-5 text-sm font-mono overflow-x-auto whitespace-pre term-scroll">
+<span class="cmd-line"><span class="cmd-comment"># Attempting to log into a server that was recently reinstalled</span></span>
+<span class="cmd-line"><span class="prompt-user">[student@workstation ~]$</span> <span class="cmd-input">ssh root@serverb</span></span>
+<span class="cmd-line"><span class="text-red-400 font-bold">@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@</span></span>
+<span class="cmd-line"><span class="cmd-output">IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+It is also possible that a host key has just been changed.
+Offending ED25519 key in /home/student/.ssh/known_hosts:12</span></span>
+<span class="cmd-line"><span class="text-red-400 font-bold">Host key verification failed.</span></span>
+<br>
+<span class="cmd-line"><span class="cmd-comment"># Fix: Remove the old cached fingerprint for serverb</span></span>
+<span class="cmd-line"><span class="prompt-user">[student@workstation ~]$</span> <span class="cmd-input">ssh-keygen -R serverb</span></span>
+<span class="cmd-line"><span class="cmd-output"># Host serverb found: line 12
+/home/student/.ssh/known_hosts updated.</span></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: Key Based Auth -->
+        <section id="tab-keys" class="tab-content fade-in hidden">
+            <header class="mb-10 border-b border-slate-200 pb-6">
+                <span class="bg-teal-100 text-teal-800 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Authentication</span>
+                <h1 class="text-3xl md:text-5xl font-extrabold text-slate-900 mt-5 mb-4 tracking-tight">Key-Based Auth</h1>
+                <p class="text-slate-500 text-lg md:text-xl leading-relaxed max-w-3xl">Passwords are vulnerable to dictionary attacks. Deploying cryptographic key pairs is the enterprise standard for SSH authentication.</p>
+            </header>
+
+            <div class="grid md:grid-cols-2 gap-8 mb-10">
+                <!-- Step 1 -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative">
+                    <div class="absolute -top-4 -left-4 w-10 h-10 bg-teal-500 text-white font-bold text-xl rounded-full flex items-center justify-center shadow-md">1</div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-3 ml-4">Generate the Pair</h3>
+                    <p class="text-sm text-slate-600 mb-4 ml-4">RHEL 9 strongly recommends the <span class="font-bold">ed25519</span> algorithm over legacy RSA.</p>
+                    
+                    <div class="rounded-lg shadow-md overflow-hidden border border-slate-700 bg-slate-800">
+                        <div class="bg-[#0f172a] p-4 text-xs font-mono overflow-x-auto whitespace-pre term-scroll">
+<span class="cmd-line"><span class="prompt-user">[student@ws ~]$</span> <span class="cmd-input">ssh-keygen -t ed25519</span></span>
+<span class="cmd-line"><span class="cmd-output">Generating public/private ed25519 key pair.
+Enter file to save key (/home/student/.ssh/id_ed25519): </span><span class="text-slate-500">[Enter]</span></span>
+<span class="cmd-line"><span class="cmd-output">Enter passphrase (empty for no passphrase): </span><span class="text-slate-500">******</span></span>
+<span class="cmd-line"><span class="cmd-output">Your identification has been saved in ...id_ed25519
+Your public key has been saved in ...id_ed25519.pub</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative">
+                    <div class="absolute -top-4 -left-4 w-10 h-10 bg-teal-500 text-white font-bold text-xl rounded-full flex items-center justify-center shadow-md">2</div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-3 ml-4">Deploy Public Key</h3>
+                    <p class="text-sm text-slate-600 mb-4 ml-4"><span class="inline-cmd">ssh-copy-id</span> securely appends your <span class="font-bold">.pub</span> key to the remote system and strictly sets SELinux contexts and permissions.</p>
+                    
+                    <div class="rounded-lg shadow-md overflow-hidden border border-slate-700 bg-slate-800">
+                        <div class="bg-[#0f172a] p-4 text-xs font-mono overflow-x-auto whitespace-pre term-scroll">
+<span class="cmd-line"><span class="prompt-user">[student@ws ~]$</span> <span class="cmd-input">ssh-copy-id student@servera</span></span>
+<span class="cmd-line"><span class="cmd-output">student@servera's password: </span></span>
+<span class="cmd-line"><span class="cmd-output">Number of key(s) added: 1
+
+Now try logging into the machine, with:   "ssh 'student@servera'"
+and check to make sure that only the key(s) you wanted were added.</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Permissions Matrix -->
+            <h3 class="text-2xl font-bold text-slate-800 mb-4">The File Permission Matrix (CRITICAL)</h3>
+            <p class="text-slate-600 mb-6 max-w-4xl leading-relaxed">
+                If the OpenSSH daemon detects that your key files or directories are readable/writable by other users, it will <strong>silently ignore the keys</strong> and fall back to prompting for a password. This is the #1 cause of SSH key failure.
+            </p>
+
+            <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm w-full overflow-x-auto">
+                <table class="w-full text-left text-sm min-w-[700px]">
+                    <thead class="bg-slate-800 text-slate-200">
+                        <tr>
+                            <th class="p-4 font-bold">File / Directory</th>
+                            <th class="p-4 font-bold">Owner & Context</th>
+                            <th class="p-4 font-bold text-center">Required Permission</th>
+                            <th class="p-4 font-bold">Failure Symptom</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-4 font-mono font-bold text-slate-700">~/.ssh/</td>
+                            <td class="p-4 text-slate-600">Client AND Server</td>
+                            <td class="p-4 text-center"><span class="bg-teal-100 text-teal-800 px-2 py-1 rounded font-mono font-bold">700</span></td>
+                            <td class="p-4 text-slate-600">Daemon refuses to read authorized_keys.</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-4 font-mono font-bold text-slate-700">id_ed25519 (Private)</td>
+                            <td class="p-4 text-slate-600">Client Side Only</td>
+                            <td class="p-4 text-center"><span class="bg-teal-100 text-teal-800 px-2 py-1 rounded font-mono font-bold">600</span></td>
+                            <td class="p-4 text-red-600 font-semibold">Client explicitly errors: "Permissions 0644 for key are too open."</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-4 font-mono font-bold text-slate-700">id_ed25519.pub (Public)</td>
+                            <td class="p-4 text-slate-600">Client Side Only</td>
+                            <td class="p-4 text-center"><span class="bg-slate-100 text-slate-800 px-2 py-1 rounded font-mono">644</span></td>
+                            <td class="p-4 text-slate-500">None. Safe to share publicly.</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-4 font-mono font-bold text-slate-700">authorized_keys</td>
+                            <td class="p-4 text-slate-600">Server Side Only</td>
+                            <td class="p-4 text-center"><span class="bg-teal-100 text-teal-800 px-2 py-1 rounded font-mono font-bold">600</span></td>
+                            <td class="p-4 text-slate-600">Daemon ignores the file; prompts for password.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TAB 4: Server Config Structure -->
+        <section id="tab-serverconfig" class="tab-content fade-in hidden">
+            <header class="mb-10 border-b border-slate-200 pb-6">
+                <span class="bg-teal-100 text-teal-800 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Configuration</span>
+                <h1 class="text-3xl md:text-5xl font-extrabold text-slate-900 mt-5 mb-4 tracking-tight">SSH Daemon Structure</h1>
+                <p class="text-slate-500 text-lg md:text-xl leading-relaxed max-w-3xl">RHEL 9 introduces drop-in directories for cleaner configuration management. Understand file precedence.</p>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-4">1. Main Configuration File</h3>
+                    <div class="bg-white p-5 border border-slate-200 rounded-lg shadow-sm mb-6">
+                        <p class="font-mono text-teal-700 font-bold mb-2">/etc/ssh/sshd_config</p>
+                        <p class="text-slate-600 text-sm">The legacy monolithic configuration file. While you can still edit this directly, it is no longer the recommended approach for automation or package upgrades in RHEL 9.</p>
+                    </div>
+
+                    <h3 class="text-xl font-bold text-slate-800 mb-4">2. Drop-in Directory (RHEL 9 Standard)</h3>
+                    <div class="bg-white p-5 border border-slate-200 rounded-lg shadow-sm">
+                        <p class="font-mono text-teal-700 font-bold mb-2">/etc/ssh/sshd_config.d/*.conf</p>
+                        <p class="text-slate-600 text-sm mb-4">Administrators create modular <span class="inline-cmd">.conf</span> files here (e.g., <span class="inline-cmd">99-custom-security.conf</span>). These files are dynamically included by the main config.</p>
+                        <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded text-sm text-blue-900">
+                            <strong>Parsing Precedence Rule:</strong> The SSH daemon parses directives in order. The <strong>FIRST</strong> obtained value for a directive is the one used. If <span class="inline-cmd">PermitRootLogin no</span> is defined in a drop-in file, a later entry in the main <span class="inline-cmd">sshd_config</span> file will be ignored!
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-4">Viewing Active Settings</h3>
+                    <p class="text-slate-600 text-sm mb-4">Because configuration is spread across multiple files, you should always test the configuration and view the <em>effective</em> configuration parsed by the daemon before restarting the service.</p>
+                    
+                    <div class="rounded-lg shadow-md overflow-hidden border border-slate-700 bg-slate-800 mb-4">
+                        <div class="bg-slate-900 px-4 py-2 flex items-center gap-2 border-b border-slate-950">
+                            <div class="w-3 h-3 rounded-full bg-slate-600"></div><div class="w-3 h-3 rounded-full bg-slate-600"></div><div class="w-3 h-3 rounded-full bg-slate-600"></div>
+                            <span class="text-slate-400 text-xs font-mono ml-2">Test Config Syntax</span>
+                        </div>
+                        <div class="bg-[#0f172a] p-4 text-sm font-mono overflow-x-auto whitespace-pre term-scroll">
+<span class="cmd-line"><span class="cmd-comment"># Test configuration syntax for errors before reloading</span></span>
+<span class="cmd-line"><span class="prompt-root">[root@server ~]#</span> <span class="cmd-input">sshd -t</span></span>
+<span class="cmd-line"><span class="cmd-comment"># No output means syntax is valid.</span></span>
+                        </div>
+                    </div>
+
+                     <div class="rounded-lg shadow-md overflow-hidden border border-slate-700 bg-slate-800">
+                        <div class="bg-slate-900 px-4 py-2 flex items-center gap-2 border-b border-slate-950">
+                            <div class="w-3 h-3 rounded-full bg-slate-600"></div><div class="w-3 h-3 rounded-full bg-slate-600"></div><div class="w-3 h-3 rounded-full bg-slate-600"></div>
+                            <span class="text-slate-400 text-xs font-mono ml-2">View Effective Output</span>
+                        </div>
+                        <div class="bg-[#0f172a] p-4 text-sm font-mono overflow-x-auto whitespace-pre term-scroll">
+<span class="cmd-line"><span class="cmd-comment"># Print the combined, active configuration (extended test mode)</span></span>
+<span class="cmd-line"><span class="prompt-root">[root@server ~]#</span> <span class="cmd-input">sshd -T | grep -i permitroot</span></span>
+<span class="cmd-line"><span class="cmd-output">permitrootlogin no</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 5: Hardening & Ports -->
+        <section id="tab-hardening" class="tab-content fade-in hidden">
+            <header class="mb-10 border-b border-slate-200 pb-6">
+                <span class="bg-teal-100 text-teal-800 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Security</span>
+                <h1 class="text-3xl md:text-5xl font-extrabold text-slate-900 mt-5 mb-4 tracking-tight">Hardening & Custom Ports</h1>
+                <p class="text-slate-500 text-lg md:text-xl leading-relaxed max-w-3xl">Implement strict access controls, disable legacy authentication, and learn the complex process of migrating the default SSH port in an SELinux environment.</p>
+            </header>
+
+            <h3 class="text-2xl font-bold text-slate-800 mb-6">1. Access Control Directives</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                <div class="bg-white p-5 border border-slate-200 rounded-lg shadow-sm">
+                    <h4 class="font-bold text-slate-800 font-mono text-lg mb-2">PermitRootLogin</h4>
+                    <p class="text-sm text-slate-600 mb-3">Controls whether the root user can log in via SSH. Default in RHEL 9 is <span class="inline-cmd">prohibit-password</span>.</p>
+                    <div class="bg-slate-100 p-3 rounded font-mono text-sm text-slate-800 border border-slate-200">
+                        PermitRootLogin no
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">Force admins to log in as standard users and use `sudo` or `su`.</p>
+                </div>
+                
+                <div class="bg-white p-5 border border-slate-200 rounded-lg shadow-sm">
+                    <h4 class="font-bold text-slate-800 font-mono text-lg mb-2">PasswordAuthentication</h4>
+                    <p class="text-sm text-slate-600 mb-3">Allows or denies logging in with an account password.</p>
+                    <div class="bg-slate-100 p-3 rounded font-mono text-sm text-slate-800 border border-slate-200">
+                        PasswordAuthentication no
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">Apply this ONLY after you have verified Key-Based Auth works.</p>
+                </div>
+
+                <div class="bg-white p-5 border border-slate-200 rounded-lg shadow-sm md:col-span-2">
+                    <h4 class="font-bold text-slate-800 font-mono text-lg mb-2">AllowUsers / DenyUsers</h4>
+                    <p class="text-sm text-slate-600 mb-3">Restrict SSH access to specific users or groups. If <span class="inline-cmd">AllowUsers</span> is used, ALL other users are implicitly denied.</p>
+                    <div class="bg-slate-100 p-3 rounded font-mono text-sm text-slate-800 border border-slate-200">
+                        AllowUsers sysadmin dev_ops deploy@10.0.0.*
+                    </div>
+                </div>
+            </div>
+
+            <h3 class="text-2xl font-bold text-slate-800 mb-6">2. Changing the Default Port (RHCSA Critical)</h3>
+            <p class="text-slate-600 mb-6 max-w-4xl leading-relaxed">
+                Security by obscurity isn't perfect, but changing the port from 22 to 8022 reduces log noise from automated botnets by 99%. In RHEL 9, you cannot simply change the config file; <strong>SELinux will actively block the daemon from binding to the new port</strong>, and Firewalld will drop external connections.
+            </p>
+
+            <!-- HTML Steps Diagram -->
+            <div class="space-y-4 max-w-4xl">
+                <!-- Step A -->
+                <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden flex flex-col md:flex-row">
+                    <div class="bg-slate-800 text-white font-bold p-4 md:w-48 flex items-center justify-center shrink-0">1. SSH Config</div>
+                    <div class="p-4 w-full">
+                        <p class="text-sm text-slate-600 mb-2">Create <span class="inline-cmd">/etc/ssh/sshd_config.d/port.conf</span> and define the new port.</p>
+                        <div class="bg-slate-100 px-3 py-2 rounded font-mono text-sm border border-slate-200">Port 8022</div>
+                    </div>
+                </div>
+
+                <!-- Step B -->
+                <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden flex flex-col md:flex-row relative">
+                    <div class="bg-teal-600 text-white font-bold p-4 md:w-48 flex items-center justify-center shrink-0">2. SELinux</div>
+                    <div class="p-4 w-full">
+                        <p class="text-sm text-slate-600 mb-2">Instruct SELinux that port 8022 belongs to the <span class="inline-cmd">ssh_port_t</span> type context using <span class="inline-cmd">semanage</span>.</p>
+                        <div class="bg-slate-900 px-3 py-2 rounded font-mono text-sm text-green-400 overflow-x-auto whitespace-pre term-scroll"><span class="prompt-root">#</span> semanage port -a -t ssh_port_t -p tcp 8022</div>
+                    </div>
+                </div>
+
+                <!-- Step C -->
+                <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden flex flex-col md:flex-row">
+                    <div class="bg-orange-500 text-white font-bold p-4 md:w-48 flex items-center justify-center shrink-0">3. Firewalld</div>
+                    <div class="p-4 w-full">
+                        <p class="text-sm text-slate-600 mb-2">Open the new port in the firewall and reload the rules.</p>
+                        <div class="bg-slate-900 px-3 py-2 rounded font-mono text-sm text-green-400 overflow-x-auto whitespace-pre term-scroll"><span class="prompt-root">#</span> firewall-cmd --add-port=8022/tcp --permanent<br><span class="prompt-root">#</span> firewall-cmd --reload</div>
+                    </div>
+                </div>
+
+                <!-- Step D -->
+                <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden flex flex-col md:flex-row">
+                    <div class="bg-slate-600 text-white font-bold p-4 md:w-48 flex items-center justify-center shrink-0">4. Restart Service</div>
+                    <div class="p-4 w-full">
+                        <p class="text-sm text-slate-600 mb-2">Because a socket/port is changing, use <span class="inline-cmd font-bold">restart</span> instead of <span class="inline-cmd">reload</span> to ensure the daemon binds properly to 8022.</p>
+                        <div class="bg-slate-900 px-3 py-2 rounded font-mono text-sm text-green-400 overflow-x-auto whitespace-pre term-scroll"><span class="prompt-root">#</span> systemctl restart sshd</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 6: Transfers & SU -->
+        <section id="tab-transfers" class="tab-content fade-in hidden">
+            <header class="mb-10 border-b border-slate-200 pb-6">
+                <span class="bg-teal-100 text-teal-800 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Utilities</span>
+                <h1 class="text-3xl md:text-5xl font-extrabold text-slate-900 mt-5 mb-4 tracking-tight">Secure Transfers & User Switching</h1>
+                <p class="text-slate-500 text-lg md:text-xl leading-relaxed max-w-3xl">Utilizing the established encrypted tunnel for file transfers and mastering local privilege escalation.</p>
+            </header>
+
+            <div class="grid md:grid-cols-2 gap-8 mb-12">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
+                    <h3 class="text-xl font-bold text-teal-700 mb-3 border-b border-slate-100 pb-2 font-mono">scp (Secure Copy)</h3>
+                    <p class="text-sm text-slate-600 mb-4 flex-grow">Transfers files directly over the SSH protocol. Uses the exact same authentication (keys/passwords) as standard SSH.</p>
+                    
+                    <div class="rounded-lg overflow-hidden border border-slate-700 bg-slate-800 mt-auto">
+                        <div class="bg-[#0f172a] p-4 text-xs font-mono overflow-x-auto whitespace-pre term-scroll">
+<span class="cmd-line"><span class="cmd-comment"># Push local file to remote /var/www</span></span>
+<span class="cmd-line"><span class="prompt-user">$</span> <span class="cmd-input">scp index.html admin@web:/var/www/</span></span>
+
+<span class="cmd-line"><span class="cmd-comment"># Pull remote directory recursively (-r)</span></span>
+<span class="cmd-line"><span class="prompt-user">$</span> <span class="cmd-input">scp -r root@db:/var/log/mariadb/ .</span></span>
+
+<span class="cmd-line"><span class="cmd-comment"># Specify custom port (Capital -P)</span></span>
+<span class="cmd-line"><span class="prompt-user">$</span> <span class="cmd-input">scp -P 8022 data.tar.gz user@host:~</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
+                    <h3 class="text-xl font-bold text-teal-700 mb-3 border-b border-slate-100 pb-2 font-mono">sftp (Secure FTP)</h3>
+                    <p class="text-sm text-slate-600 mb-4 flex-grow">An interactive session for browsing remote directories and transferring files. Excellent when you don't know the exact path beforehand.</p>
+                    
+                    <div class="rounded-lg overflow-hidden border border-slate-700 bg-slate-800 mt-auto">
+                        <div class="bg-[#0f172a] p-4 text-xs font-mono overflow-x-auto whitespace-pre term-scroll">
+<span class="cmd-line"><span class="prompt-user">$</span> <span class="cmd-input">sftp admin@webserver</span></span>
+<span class="cmd-line"><span class="cmd-output">Connected to webserver.</span></span>
+<span class="cmd-line"><span class="cmd-output">sftp> </span><span class="cmd-input">cd /var/www/html</span></span>
+<span class="cmd-line"><span class="cmd-output">sftp> </span><span class="cmd-input">get config.php</span></span>
+<span class="cmd-line"><span class="cmd-output">Fetching /var/www/html/config.php to config.php</span></span>
+<span class="cmd-line"><span class="cmd-output">sftp> </span><span class="cmd-input">put update.zip</span></span>
+<span class="cmd-line"><span class="cmd-output">Uploading update.zip to /var/www/html/</span></span>
+<span class="cmd-line"><span class="cmd-output">sftp> </span><span class="cmd-input">exit</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h3 class="text-2xl font-bold text-slate-800 mb-4 mt-6">Substitute User: <code class="bg-slate-200 text-slate-800 px-2 py-1 rounded font-mono text-xl">su</code> vs <code class="bg-teal-100 text-teal-800 px-2 py-1 rounded font-mono text-xl">su -</code></h3>
+            <p class="text-slate-600 mb-6 max-w-4xl leading-relaxed">
+                When direct root login via SSH is disabled, administrators log in as a standard user and switch context. Understanding the hyphen is heavily tested in RHCSA.
+            </p>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-10 w-full overflow-x-auto">
+                <table class="w-full text-left text-sm min-w-[600px]">
+                    <thead class="bg-slate-800 text-slate-200">
+                        <tr>
+                            <th class="p-4 font-bold font-mono">Command</th>
+                            <th class="p-4 font-bold">Environment Behavior</th>
+                            <th class="p-4 font-bold">Directory Behavior</th>
+                            <th class="p-4 font-bold">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-4 font-mono font-bold text-slate-800 text-lg">su</td>
+                            <td class="p-4 text-slate-600"><strong>Keeps</strong> the original user's variables and $PATH. Root commands (in <span class="inline-cmd">/sbin</span>) may not execute natively.</td>
+                            <td class="p-4 text-slate-600">Stays in current working directory.</td>
+                            <td class="p-4"><span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">Not Recommended</span></td>
+                        </tr>
+                        <tr class="hover:bg-teal-50 transition-colors bg-teal-50/20">
+                            <td class="p-4 font-mono font-bold text-teal-700 text-lg">su -</td>
+                            <td class="p-4 text-slate-700"><strong>Simulates full login.</strong> Loads root's <span class="inline-cmd">.bash_profile</span>, proper $PATH, and environment.</td>
+                            <td class="p-4 text-slate-700">Changes directory to <span class="inline-cmd">/root</span></td>
+                            <td class="p-4"><span class="bg-teal-600 text-white px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">Best Practice</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TAB 7: Interactive Exercises -->
+        <section id="tab-exercises" class="tab-content fade-in hidden">
+            <header class="mb-10 border-b border-slate-200 pb-6">
+                <span class="bg-teal-100 text-teal-800 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">Assessment</span>
+                <h1 class="text-3xl md:text-5xl font-extrabold text-slate-900 mt-5 mb-4 tracking-tight">RHCSA Challenge Labs</h1>
+                <p class="text-slate-500 text-lg md:text-xl leading-relaxed max-w-3xl">Active recall exercises. Read the scenario, formulate the exact CLI syntax, then reveal the answer to verify.</p>
+            </header>
+
+            <div class="space-y-6">
+                <!-- Lab 1 -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-2 bg-slate-300"></div>
+                    <div class="flex flex-col md:flex-row justify-between md:items-start mb-4 ml-4">
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800">Lab 1: Remote Execution</h3>
+                            <p class="text-slate-600 mt-2 max-w-2xl text-sm leading-relaxed">You are on <span class="inline-cmd">workstation</span>. Using your current account, check the system uptime of <span class="inline-cmd">serverb</span> over SSH. Ensure the connection closes immediately after printing the uptime.</p>
+                        </div>
+                        <span class="bg-slate-100 text-slate-600 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider mt-2 md:mt-0 whitespace-nowrap self-start">Level: Basic</span>
+                    </div>
+                    <div class="ml-4">
+                        <button class="toggle-btn bg-slate-800 hover:bg-slate-700 text-white text-sm px-5 py-2.5 rounded shadow transition-colors font-semibold" data-reveal="reveal-1">Reveal Solution</button>
+                        <div id="reveal-1" class="reveal-content rounded-lg overflow-hidden border border-slate-700 bg-slate-800">
+                            <div class="bg-[#0f172a] p-5 text-sm font-mono overflow-x-auto whitespace-pre term-scroll"><span class="cmd-line"><span class="prompt-user">[student@workstation ~]$</span> <span class="cmd-input">ssh serverb uptime</span></span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lab 2 -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-2 bg-teal-400"></div>
+                    <div class="flex flex-col md:flex-row justify-between md:items-start mb-4 ml-4">
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800">Lab 2: The Port Change Trap</h3>
+                            <p class="text-slate-600 mt-2 max-w-2xl text-sm leading-relaxed">You need to copy a file <span class="inline-cmd">report.pdf</span> to <span class="inline-cmd">serverc</span> using the <span class="inline-cmd">admin</span> account. However, <span class="inline-cmd">serverc</span> is configured to listen for SSH on custom port <strong>2022</strong>. What is the exact command?</p>
+                        </div>
+                        <span class="bg-teal-100 text-teal-800 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider mt-2 md:mt-0 whitespace-nowrap self-start">Level: Intermediate</span>
+                    </div>
+                    <div class="ml-4">
+                        <button class="toggle-btn bg-slate-800 hover:bg-slate-700 text-white text-sm px-5 py-2.5 rounded shadow transition-colors font-semibold" data-reveal="reveal-2">Reveal Solution</button>
+                        <div id="reveal-2" class="reveal-content rounded-lg overflow-hidden border border-slate-700 bg-slate-800">
+                            <div class="bg-[#0f172a] p-5 text-sm font-mono overflow-x-auto whitespace-pre term-scroll">
+<span class="cmd-line"><span class="cmd-comment"># Remember: scp uses a capital -P for ports (lowercase -p preserves file attributes)</span></span>
+<span class="cmd-line"><span class="prompt-user">[student@workstation ~]$</span> <span class="cmd-input">scp -P 2022 report.pdf admin@serverc:~</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lab 3 -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-2 bg-orange-400"></div>
+                    <div class="flex flex-col md:flex-row justify-between md:items-start mb-4 ml-4">
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800">Lab 3: Comprehensive Hardening</h3>
+                            <p class="text-slate-600 mt-2 max-w-2xl text-sm leading-relaxed">You are configuring <span class="inline-cmd">servera</span>. Create a drop-in configuration file to explicitly block <span class="inline-cmd">root</span> login, and verify the daemon parsed your setting without dropping connections.</p>
+                        </div>
+                        <span class="bg-orange-100 text-orange-800 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider mt-2 md:mt-0 whitespace-nowrap self-start">Level: Advanced</span>
+                    </div>
+                    <div class="ml-4">
+                        <button class="toggle-btn bg-slate-800 hover:bg-slate-700 text-white text-sm px-5 py-2.5 rounded shadow transition-colors font-semibold" data-reveal="reveal-3">Reveal Solution</button>
+                        <div id="reveal-3" class="reveal-content rounded-lg overflow-hidden border border-slate-700 bg-slate-800">
+                            <div class="bg-[#0f172a] p-5 text-sm font-mono overflow-x-auto whitespace-pre term-scroll">
+<span class="cmd-line"><span class="cmd-comment"># Step 1: Create drop-in config</span></span>
+<span class="cmd-line"><span class="prompt-root">[root@servera ~]#</span> <span class="cmd-input">echo "PermitRootLogin no" > /etc/ssh/sshd_config.d/99-security.conf</span></span>
+
+<span class="cmd-line"><span class="cmd-comment"># Step 2: Test syntax (Should return nothing if OK)</span></span>
+<span class="cmd-line"><span class="prompt-root">[root@servera ~]#</span> <span class="cmd-input">sshd -t</span></span>
+
+<span class="cmd-line"><span class="cmd-comment"># Step 3: Verify effective configuration parsed by daemon</span></span>
+<span class="cmd-line"><span class="prompt-root">[root@servera ~]#</span> <span class="cmd-input">sshd -T | grep permitroot</span></span>
+<span class="cmd-line"><span class="cmd-output">permitrootlogin no</span></span>
+
+<span class="cmd-line"><span class="cmd-comment"># Step 4: Reload service to apply without dropping sessions</span></span>
+<span class="cmd-line"><span class="prompt-root">[root@servera ~]#</span> <span class="cmd-input">systemctl reload sshd</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Mobile Menu Toggle
+            const mobileBtn = document.getElementById('mobile-menu-btn');
+            const sidebar = document.getElementById('sidebar');
+
+            mobileBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('hidden');
+                sidebar.classList.toggle('fixed');
+                sidebar.classList.toggle('inset-y-0');
+                sidebar.classList.toggle('left-0');
+                sidebar.classList.toggle('z-50');
+                sidebar.classList.toggle('w-80');
+            });
+
+            // Tab Navigation Logic
+            const navButtons = document.querySelectorAll('.nav-btn');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            navButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // Reset all buttons
+                    navButtons.forEach(btn => {
+                        btn.classList.remove('nav-active', 'font-bold');
+                        btn.classList.add('font-medium');
+                    });
+                    
+                    // Set active button
+                    button.classList.add('nav-active', 'font-bold');
+                    button.classList.remove('font-medium');
+
+                    // Hide all tabs and remove animation classes
+                    tabContents.forEach(content => {
+                        content.classList.add('hidden');
+                        content.classList.remove('block', 'fade-in');
+                    });
+
+                    // Show target tab and trigger animation
+                    const targetId = button.getAttribute('data-target');
+                    const targetContent = document.getElementById(targetId);
+                    
+                    setTimeout(() => {
+                        targetContent.classList.remove('hidden');
+                        targetContent.classList.add('block', 'fade-in');
+                    }, 10);
+
+                    // Close mobile menu upon selection
+                    if (window.innerWidth < 768 && !sidebar.classList.contains('hidden')) {
+                        sidebar.classList.add('hidden');
+                        sidebar.classList.remove('fixed', 'inset-y-0', 'left-0', 'z-50', 'w-80');
+                    }
+                    
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                });
+            });
+
+            // Interactive Reveal Buttons Logic
+            const toggleButtons = document.querySelectorAll('.toggle-btn');
+            toggleButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.getAttribute('data-reveal');
+                    const target = document.getElementById(targetId);
+                    
+                    if (target.classList.contains('show')) {
+                        target.classList.remove('show');
+                        btn.textContent = 'Reveal Solution';
+                        btn.classList.replace('bg-teal-600', 'bg-slate-800');
+                        btn.classList.replace('hover:bg-teal-700', 'hover:bg-slate-700');
+                    } else {
+                        target.classList.add('show');
+                        btn.textContent = 'Hide Solution';
+                        btn.classList.replace('bg-slate-800', 'bg-teal-600');
+                        btn.classList.replace('hover:bg-slate-700', 'hover:bg-teal-700');
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
